@@ -1,0 +1,11 @@
+font.sans-serif : Arial
+font.family : sans-serif
+axes.spines.top : False
+axes.spines.right : False
+axes.labelsize : medium
+xtick.labelsize : small
+ytick.labelsize : small
+legend.frameon : False
+legend.fontsize : 18
+font.size : 20
+
