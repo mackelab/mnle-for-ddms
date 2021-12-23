@@ -2,7 +2,7 @@
 
 This repository contains code for reproducing the results of the paper "Flexible and efficient simulation-based inference for models of decision-making".
 
-It also contains the main research code for MNLE, which will be integrated into the (`sbi`)[https://github.com/mackelab/sbi] toolbox soon.
+It also contains the main research code for MNLE, which will be integrated into the [`sbi`](https://github.com/mackelab/sbi) toolbox soon.
 
 ## Content
 

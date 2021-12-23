@@ -1,3 +1,0 @@
-[submodule "src/sbi"]
-	path = src/sbi
-	url = git@github.com:mackelab/sbi.git
