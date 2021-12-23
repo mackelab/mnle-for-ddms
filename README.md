@@ -10,10 +10,6 @@ For installation run
 
 `pip install -r requirements.txt`
 
-and then 
-
-`pip install -e git+https://github.com/mackelab/sbi@ddm#egg=sbi`.
-
 If you encounter problems, please create an issue.
 
 ## Content
