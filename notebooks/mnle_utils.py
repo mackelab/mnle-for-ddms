@@ -321,7 +321,11 @@ class MNLE(nn.Module):
         return samples.exp() if self.use_log_rts else samples, choices
 
     def log_prob(
-        self, rts, choices, theta, ll_lower_bound=np.log(1e-7), track_gradients=False
+        self,
+        x,
+        theta,
+        track_gradients=False,
+        ll_lower_bound=np.log(1e-7),
     ):
         """Return joint log likelihood of a batch rts and choices,
         for each entry in a batch of parameters theta.
@@ -331,9 +335,11 @@ class MNLE(nn.Module):
         is interpreted as iid trials)
         """
         num_parameters = theta.shape[0]
-        num_trials = rts.shape[0]
-        assert rts.ndim > 1
-        assert rts.shape == choices.shape
+        num_trials = x.shape[0]
+        assert x.ndim > 1
+        assert x.shape[1] == 2, "MNLE assumes x to have two columns: [rts; choices]"
+        rts = x[:, 0:1]
+        choices = x[:, 1:2]
 
         # Repeat parameters for each trial.
         theta_repeated = theta.repeat(num_trials, 1)
