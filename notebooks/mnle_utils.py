@@ -14,266 +14,6 @@ from torch import Tensor, optim
 from torch.utils import data
 
 
-def run_mcmc(
-    prior: Distribution,
-    potential_fn: Callable,
-    mcmc_parameters: dict,
-    num_samples: int,
-) -> Tensor:
-    """Run slice sampling MCMC given prior and potential function, return samples.
-
-    Args:
-        prior: prior distribution, usually a TransformedDistribution in unconstrained space.
-        potential_fn: Callable returning the negative log posterior potential.
-        mcmc_parameters: MCMC hyperparameters.
-        num_samples: number of samples to obtain.
-
-    Returns:
-        Tensor: [description]
-    """
-
-    num_chains = mcmc_parameters["num_chains"]
-    num_warmup = mcmc_parameters["warmup_steps"]
-    thin = mcmc_parameters["thin"]
-    init_strategy = mcmc_parameters["init_strategy"]
-
-    # Obtain initial parameters for each chain using sequential importantce reweighting.
-    if init_strategy == "sir":
-        initial_params = torch.cat(
-            [sir(prior, potential_fn, **mcmc_parameters) for _ in range(num_chains)]
-        )
-    else:
-        initial_params = prior.sample((num_chains,))
-    dim_samples = initial_params.shape[1]
-
-    # Use vectorized slice sampling.
-    posterior_sampler = SliceSamplerVectorized(
-        init_params=tensor2numpy(initial_params),
-        log_prob_fn=potential_fn,
-        num_chains=num_chains,
-        verbose=False,
-    )
-    # Extract relevant samples.
-    warmup_ = num_warmup * thin
-    num_samples_ = np.ceil((num_samples * thin) / num_chains)
-    samples = posterior_sampler.run(warmup_ + num_samples_)
-    samples = samples[:, warmup_:, :]  # discard warmup steps
-    samples = samples[:, ::thin, :]  # thin chains
-    samples = torch.from_numpy(samples)  # chains x samples x dim
-
-    samples = samples.reshape(-1, dim_samples)[:num_samples, :]
-    return samples
-
-
-class BernoulliMN(nn.Module):
-    """Net for learning a conditional Bernoulli mass function over choices given parameters.
-
-    Takes as input parameters theta and learns the parameter p of a Bernoulli.
-
-    Defines log prob and sample functions.
-    """
-
-    def __init__(self, n_input=4, n_output=1, n_hidden_units=20, n_hidden_layers=2):
-        """Initialize Bernoulli mass network.
-
-        Args:
-            n_input: number of input features
-            n_output: number of output features, default 1 for a single Bernoulli variable.
-            n_hidden_units: number of hidden units per hidden layer.
-            n_hidden_layers: number of hidden layers.
-        """
-        super(BernoulliMN, self).__init__()
-
-        self.n_hidden_layers = n_hidden_layers
-
-        self.activation_fun = nn.Sigmoid()
-
-        self.input_layer = nn.Linear(n_input, n_hidden_units)
-
-        # Repeat hidden units hidden layers times.
-        self.hidden_layers = nn.ModuleList()
-        for _ in range(self.n_hidden_layers):
-            self.hidden_layers.append(nn.Linear(n_hidden_units, n_hidden_units))
-
-        self.output_layer = nn.Linear(n_hidden_units, n_output)
-
-    def forward(self, theta):
-        """Return Bernoulli probability predicted from a batch of parameters.
-
-        Args:
-            theta: batch of input parameters for the net.
-
-        Returns:
-            Tensor: batch of predicted Bernoulli probabilities.
-        """
-        assert theta.dim() == 2, "theta needs to have a batch dimension."
-
-        # forward path
-        theta = self.activation_fun(self.input_layer(theta))
-
-        # iterate n hidden layers, input x and calculate tanh activation
-        for layer in self.hidden_layers:
-            theta = self.activation_fun(layer(theta))
-
-        p_hat = self.activation_fun(self.output_layer(theta))
-
-        return p_hat
-
-    def log_prob(self, theta, x):
-        """Return Bernoulli log probability of choices x, given parameters theta.
-
-        Args:
-            theta: parameters for input to the BernoulliMN.
-            x: choices to evaluate.
-
-        Returns:
-            Tensor: log probs with shape (x.shape[0],)
-        """
-        # Predict Bernoulli p and evaluate.
-        p = self.forward(theta=theta)
-        return Bernoulli(probs=p).log_prob(x)
-
-    def sample(self, theta, num_samples):
-        """Returns samples from Bernoulli RV with p predicted via net.
-
-        Args:
-            theta: batch of parameters for prediction.
-            num_samples: number of samples to obtain.
-
-        Returns:
-            Tensor: Bernoulli samples with shape (batch, num_samples, 1)
-        """
-
-        # Predict Bernoulli p and sample.
-        p = self.forward(theta)
-        return Bernoulli(probs=p).sample((num_samples,))
-
-
-def get_data_loaders(theta, choices, batch_size, validation_fraction):
-    """Return train and test data loaders given data.
-
-    Args:
-        theta: DDM parameters.
-        choices: Corresponding DDM choices.
-        batch_size: training batch size.
-        validation_fraction: fraction of test data set.
-
-    Returns:
-        Dataloader, Dataloader: train and test dataloaders.
-    """
-    num_examples = theta.shape[0]
-    num_training_examples = int((1 - validation_fraction) * num_examples)
-
-    dataset = data.TensorDataset(theta, choices)
-    permuted_indices = torch.randperm(num_examples)
-    train_indices, val_indices = (
-        permuted_indices[:num_training_examples],
-        permuted_indices[num_training_examples:],
-    )
-
-    train_loader = data.DataLoader(
-        dataset,
-        batch_size=batch_size,
-        drop_last=True,
-        sampler=data.sampler.SubsetRandomSampler(train_indices),
-    )
-
-    val_loader = data.DataLoader(
-        dataset,
-        batch_size=batch_size,
-        drop_last=True,
-        shuffle=False,
-        sampler=data.sampler.SubsetRandomSampler(val_indices),
-    )
-
-    return train_loader, val_loader
-
-
-def train_choice_net(
-    theta,
-    choices,
-    net: BernoulliMN,
-    batch_size: int = 1000,
-    max_num_epochs: int = 1000,
-    learning_rate=5e-4,
-    validation_fraction=0.1,
-    stop_after_epochs=20,
-):
-    """Return trained BernoulliMN given data and training hyperparameters.
-
-    Args:
-        theta: DDM parameters
-        choices: corresponding DDM choices.
-        net: initialized BernoulliMN
-        batch_size: training batch size
-        max_num_epochs: maximum number of epochs to train.
-        learning_rate: learning rate.
-        validation_fraction: fraction of validation data.
-        stop_after_epochs: number of epochs to wait without validation loss reduction
-            before stopping training.
-
-    Returns:
-        nn.Module, Tensor: Trained net, validation log probs.
-    """
-    optimizer = optim.Adam(
-        list(net.parameters()),
-        lr=learning_rate,
-    )
-
-    train_loader, val_loader = get_data_loaders(
-        theta, choices, batch_size, validation_fraction
-    )
-
-    vallp = []
-    converged = False
-    num_epochs_trained = 0
-    largest_vallp = -float("inf")
-    last_vallp_change = 0
-
-    log = logging.getLogger(__name__)
-    while num_epochs_trained < max_num_epochs and not converged:
-
-        net.train()
-        for batch in train_loader:
-            optimizer.zero_grad()
-            theta_batch, x_batch = (
-                batch[0],
-                batch[1],
-            )
-            # Evaluate on x with theta as context.
-            log_prob = net.log_prob(x=x_batch, theta=theta_batch)
-            loss = -torch.mean(log_prob)
-            loss.backward()
-            optimizer.step()
-
-        # Calculate validation performance.
-        net.eval()
-        log_prob_sum = 0
-        with torch.no_grad():
-            for batch in val_loader:
-                theta_batch, x_batch = (
-                    batch[0],
-                    batch[1],
-                )
-                # Evaluate on x with theta as context.
-                log_prob = net.log_prob(x=x_batch, theta=theta_batch)
-                log_prob_sum += log_prob.sum().item()
-        # Take mean over all validation samples.
-        _val_log_prob = log_prob_sum / (len(val_loader) * val_loader.batch_size)
-        vallp.append(_val_log_prob)
-
-        if largest_vallp < _val_log_prob:
-            last_vallp_change = 0
-            largest_vallp = _val_log_prob
-        else:
-            last_vallp_change += 1
-
-        converged = last_vallp_change > stop_after_epochs
-        num_epochs_trained += 1
-
-    return net, vallp
-
-
 class MNLE(nn.Module):
     """Class for Mixed Neural Likelihood Estimation. It combines a Bernoulli choice
     net and a flow over reaction times to model decision-making data."""
@@ -447,6 +187,266 @@ class MNLE(nn.Module):
             return potential - ladj
 
         return pf
+
+
+class BernoulliMN(nn.Module):
+    """Net for learning a conditional Bernoulli mass function over choices given parameters.
+
+    Takes as input parameters theta and learns the parameter p of a Bernoulli.
+
+    Defines log prob and sample functions.
+    """
+
+    def __init__(self, n_input=4, n_output=1, n_hidden_units=20, n_hidden_layers=2):
+        """Initialize Bernoulli mass network.
+
+        Args:
+            n_input: number of input features
+            n_output: number of output features, default 1 for a single Bernoulli variable.
+            n_hidden_units: number of hidden units per hidden layer.
+            n_hidden_layers: number of hidden layers.
+        """
+        super(BernoulliMN, self).__init__()
+
+        self.n_hidden_layers = n_hidden_layers
+
+        self.activation_fun = nn.Sigmoid()
+
+        self.input_layer = nn.Linear(n_input, n_hidden_units)
+
+        # Repeat hidden units hidden layers times.
+        self.hidden_layers = nn.ModuleList()
+        for _ in range(self.n_hidden_layers):
+            self.hidden_layers.append(nn.Linear(n_hidden_units, n_hidden_units))
+
+        self.output_layer = nn.Linear(n_hidden_units, n_output)
+
+    def forward(self, theta):
+        """Return Bernoulli probability predicted from a batch of parameters.
+
+        Args:
+            theta: batch of input parameters for the net.
+
+        Returns:
+            Tensor: batch of predicted Bernoulli probabilities.
+        """
+        assert theta.dim() == 2, "theta needs to have a batch dimension."
+
+        # forward path
+        theta = self.activation_fun(self.input_layer(theta))
+
+        # iterate n hidden layers, input x and calculate tanh activation
+        for layer in self.hidden_layers:
+            theta = self.activation_fun(layer(theta))
+
+        p_hat = self.activation_fun(self.output_layer(theta))
+
+        return p_hat
+
+    def log_prob(self, theta, x):
+        """Return Bernoulli log probability of choices x, given parameters theta.
+
+        Args:
+            theta: parameters for input to the BernoulliMN.
+            x: choices to evaluate.
+
+        Returns:
+            Tensor: log probs with shape (x.shape[0],)
+        """
+        # Predict Bernoulli p and evaluate.
+        p = self.forward(theta=theta)
+        return Bernoulli(probs=p).log_prob(x)
+
+    def sample(self, theta, num_samples):
+        """Returns samples from Bernoulli RV with p predicted via net.
+
+        Args:
+            theta: batch of parameters for prediction.
+            num_samples: number of samples to obtain.
+
+        Returns:
+            Tensor: Bernoulli samples with shape (batch, num_samples, 1)
+        """
+
+        # Predict Bernoulli p and sample.
+        p = self.forward(theta)
+        return Bernoulli(probs=p).sample((num_samples,))
+
+
+def run_mcmc(
+    prior: Distribution,
+    potential_fn: Callable,
+    mcmc_parameters: dict,
+    num_samples: int,
+) -> Tensor:
+    """Run slice sampling MCMC given prior and potential function, return samples.
+
+    Args:
+        prior: prior distribution, usually a TransformedDistribution in unconstrained space.
+        potential_fn: Callable returning the negative log posterior potential.
+        mcmc_parameters: MCMC hyperparameters.
+        num_samples: number of samples to obtain.
+
+    Returns:
+        Tensor: [description]
+    """
+
+    num_chains = mcmc_parameters["num_chains"]
+    num_warmup = mcmc_parameters["warmup_steps"]
+    thin = mcmc_parameters["thin"]
+    init_strategy = mcmc_parameters["init_strategy"]
+
+    # Obtain initial parameters for each chain using sequential importantce reweighting.
+    if init_strategy == "sir":
+        initial_params = torch.cat(
+            [sir(prior, potential_fn, **mcmc_parameters) for _ in range(num_chains)]
+        )
+    else:
+        initial_params = prior.sample((num_chains,))
+    dim_samples = initial_params.shape[1]
+
+    # Use vectorized slice sampling.
+    posterior_sampler = SliceSamplerVectorized(
+        init_params=tensor2numpy(initial_params),
+        log_prob_fn=potential_fn,
+        num_chains=num_chains,
+        verbose=False,
+    )
+    # Extract relevant samples.
+    warmup_ = num_warmup * thin
+    num_samples_ = np.ceil((num_samples * thin) / num_chains)
+    samples = posterior_sampler.run(warmup_ + num_samples_)
+    samples = samples[:, warmup_:, :]  # discard warmup steps
+    samples = samples[:, ::thin, :]  # thin chains
+    samples = torch.from_numpy(samples)  # chains x samples x dim
+
+    samples = samples.reshape(-1, dim_samples)[:num_samples, :]
+    return samples
+
+
+def get_data_loaders(theta, choices, batch_size, validation_fraction):
+    """Return train and test data loaders given data.
+
+    Args:
+        theta: DDM parameters.
+        choices: Corresponding DDM choices.
+        batch_size: training batch size.
+        validation_fraction: fraction of test data set.
+
+    Returns:
+        Dataloader, Dataloader: train and test dataloaders.
+    """
+    num_examples = theta.shape[0]
+    num_training_examples = int((1 - validation_fraction) * num_examples)
+
+    dataset = data.TensorDataset(theta, choices)
+    permuted_indices = torch.randperm(num_examples)
+    train_indices, val_indices = (
+        permuted_indices[:num_training_examples],
+        permuted_indices[num_training_examples:],
+    )
+
+    train_loader = data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        drop_last=True,
+        sampler=data.sampler.SubsetRandomSampler(train_indices),
+    )
+
+    val_loader = data.DataLoader(
+        dataset,
+        batch_size=batch_size,
+        drop_last=True,
+        shuffle=False,
+        sampler=data.sampler.SubsetRandomSampler(val_indices),
+    )
+
+    return train_loader, val_loader
+
+
+def train_choice_net(
+    theta,
+    choices,
+    net: BernoulliMN,
+    batch_size: int = 1000,
+    max_num_epochs: int = 1000,
+    learning_rate=5e-4,
+    validation_fraction=0.1,
+    stop_after_epochs=20,
+):
+    """Return trained BernoulliMN given data and training hyperparameters.
+
+    Args:
+        theta: DDM parameters
+        choices: corresponding DDM choices.
+        net: initialized BernoulliMN
+        batch_size: training batch size
+        max_num_epochs: maximum number of epochs to train.
+        learning_rate: learning rate.
+        validation_fraction: fraction of validation data.
+        stop_after_epochs: number of epochs to wait without validation loss reduction
+            before stopping training.
+
+    Returns:
+        nn.Module, Tensor: Trained net, validation log probs.
+    """
+    optimizer = optim.Adam(
+        list(net.parameters()),
+        lr=learning_rate,
+    )
+
+    train_loader, val_loader = get_data_loaders(
+        theta, choices, batch_size, validation_fraction
+    )
+
+    vallp = []
+    converged = False
+    num_epochs_trained = 0
+    largest_vallp = -float("inf")
+    last_vallp_change = 0
+
+    log = logging.getLogger(__name__)
+    while num_epochs_trained < max_num_epochs and not converged:
+
+        net.train()
+        for batch in train_loader:
+            optimizer.zero_grad()
+            theta_batch, x_batch = (
+                batch[0],
+                batch[1],
+            )
+            # Evaluate on x with theta as context.
+            log_prob = net.log_prob(x=x_batch, theta=theta_batch)
+            loss = -torch.mean(log_prob)
+            loss.backward()
+            optimizer.step()
+
+        # Calculate validation performance.
+        net.eval()
+        log_prob_sum = 0
+        with torch.no_grad():
+            for batch in val_loader:
+                theta_batch, x_batch = (
+                    batch[0],
+                    batch[1],
+                )
+                # Evaluate on x with theta as context.
+                log_prob = net.log_prob(x=x_batch, theta=theta_batch)
+                log_prob_sum += log_prob.sum().item()
+        # Take mean over all validation samples.
+        _val_log_prob = log_prob_sum / (len(val_loader) * val_loader.batch_size)
+        vallp.append(_val_log_prob)
+
+        if largest_vallp < _val_log_prob:
+            last_vallp_change = 0
+            largest_vallp = _val_log_prob
+        else:
+            last_vallp_change += 1
+
+        converged = last_vallp_change > stop_after_epochs
+        num_epochs_trained += 1
+
+    return net, vallp
 
 
 # Refactored from
