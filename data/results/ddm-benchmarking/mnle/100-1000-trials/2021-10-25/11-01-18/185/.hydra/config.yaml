@@ -1,0 +1,28 @@
+compute_metrics: true
+device: ${algorithm.device}
+seed: null
+algorithm:
+  name: NLE
+  run: lan.nle-ddm-pretrained.run
+  device: cpu
+  params:
+    mcmc_parameters:
+      num_chains: 10
+      thin: 10
+      warmup_steps: 100
+      init_strategy: sir
+      sir_batch_size: 1000
+      sir_num_batches: 100
+    num_transforms: 5
+    num_bins: 5
+    use_log_rts: true
+    tails: rectified
+    tail_bound: 5.0
+    tail_bound_eps: 1.0e-05
+    base_distribution: lognormal
+task:
+  name: ddm
+  num_simulations: 100000
+  num_observation: 387
+joblib:
+  n_jobs: 20

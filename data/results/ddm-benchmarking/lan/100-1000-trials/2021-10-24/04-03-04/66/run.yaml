@@ -1,0 +1,22 @@
+algorithm:
+  device: cpu
+  name: LAN-KDE
+  params:
+    automatic_transforms_enabled: true
+    mcmc_parameters:
+      init_strategy: sir
+      num_chains: 10
+      sir_batch_size: 1000
+      sir_num_batches: 100
+      thin: 10
+      warmup_steps: 100
+  run: lan.lan.run
+compute_metrics: true
+device: cpu
+joblib:
+  n_jobs: 20
+seed: 918460658
+task:
+  name: ddm
+  num_observation: 266
+  num_simulations: 100000

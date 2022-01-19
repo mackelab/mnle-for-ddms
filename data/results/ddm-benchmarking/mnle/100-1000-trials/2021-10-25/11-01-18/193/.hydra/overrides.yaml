@@ -1,0 +1,5 @@
+- task=ddm
+- task.num_observation=395
+- task.num_simulations=100000
+- algorithm=nle-ddm-pretrained
+- +joblib.n_jobs=20

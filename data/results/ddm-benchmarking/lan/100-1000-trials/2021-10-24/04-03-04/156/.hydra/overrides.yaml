@@ -1,0 +1,5 @@
+- task=ddm
+- task.num_observation=356
+- task.num_simulations=100000
+- algorithm=lan
+- +joblib.n_jobs=20
