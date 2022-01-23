@@ -1,3 +1,4 @@
-pandas
+omegaconf
 sbibm @ git+https://github.com/mackelab/sbibm@ddm-task#egg=sbibm
+sbi @ git+https://github.com/mackelab/sbi@main#egg=sbi
 tensorflow
