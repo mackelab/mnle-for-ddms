@@ -20,10 +20,10 @@ Additionally, this repository contains the results and the code for reproducing 
 ```python
 pip install -r requirements.txt
 ```
-in the `mnle-for-ddms` folder. It will install a custom branch of the `sbibm` benchmarking frame, the current version of `sbi` and additional required packages. 
+in the `mnle-for-ddms` folder. It will install a custom branch of the `sbibm` benchmarking framework, the current version of `sbi` and additional required packages. 
 
 The [`notebooks`](notebooks) folder contains jupyter notebooks for reproducing the figures presented in the paper.
 
-The core code for MNLE is in [`notebooks/mnle_utils.py`](notebooks/mnle_utils.py).
+The research code for MNLE is in [`notebooks/mnle_utils.py`](notebooks/mnle_utils.py).
 
 Please do not hesitate to create an issue if you have questions or encounter problems.
