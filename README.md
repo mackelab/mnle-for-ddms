@@ -14,7 +14,7 @@ For more details we refer to our paper ["Flexible and efficient simulation-based
 
 ## Usage
 
-MNLE is implemented as an extension to the widely used python package for simulation-based inference, [`sbi`](https://github.com/mackelab/sbi). We provide a tutorial on how to use MNLE in `sbi` at [`notebooks/MNLE-Tutorial.ipynb`](notebooks/MNLE-Tutorial.ipynb). 
+MNLE is implemented as an extension to the widely used python package for simulation-based inference, [`sbi`](https://github.com/mackelab/sbi). In `sbi` there is a tutorial on how to use `MNLE` for SBI with trial-based mixed data (see [here](https://github.com/mackelab/sbi/blob/main/tutorials/14_SBI_with_trial-based_mixed_data.ipynb)). Additionally, we provide a tutorial on how to use MNLE in for decision-making models at [`notebooks/MNLE-Tutorial.ipynb`](notebooks/MNLE-Tutorial.ipynb). 
 
 Additionally, this repository contains the results and the code for reproducing the figures of the MNLE paper. To run the notebooks locally, clone this repository and then run
 ```python
