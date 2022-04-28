@@ -54,12 +54,13 @@ class LANPotential(BasePotential):
     allow_iid_x = True  # type: ignore
     """Inits LAN potential."""
 
-    def __init__(self, lan, prior, x_o, device="cpu", ll_lower_bound=np.log(1e-7)):
+    def __init__(self, lan, prior, x_o, device="cpu", transform_a=True, ll_lower_bound=np.log(1e-7)):
         super().__init__(prior, x_o, device)
 
         self.lan = lan
         self.device = device
         self.ll_lower_bound = ll_lower_bound
+        self.transform_a = transform_a
         assert x_o.ndim == 2
         assert x_o.shape[1] == 1    
         rts = abs(x_o)
@@ -78,7 +79,7 @@ class LANPotential(BasePotential):
         num_parameters = theta.shape[0]
         # Convert DDM boundary seperation to symmetric boundary size.
         # theta_lan = a_transform(theta)
-        theta_lan = theta
+        theta_lan = a_transform(theta) if self.transform_a else theta
 
         # Evaluate LAN on batch (as suggested in LANfactory README.)
         batch = torch.hstack((

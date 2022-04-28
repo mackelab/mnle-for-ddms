@@ -14,9 +14,10 @@ BASE_DIR = Path.cwd()
 
 # NOTE: set budget and n_samples, e.g., for 10k budget set 10_4 and n_samples 100
 # for 100k budget set 10_4 and n_samples 1000
-budget = "10_7"
+budget = "10_5_ours"
 n_samples = 1000
-num_repeats = 4
+num_repeats = 9
+num_epochs = 30
 
 # NOTE: The resulting trainiend LAN will be saved with a unique ID under torch_models/ddm_{budget}.
 
@@ -53,7 +54,7 @@ for _ in range(num_repeats):
 
     network_config = lanfactory.config.network_configs.network_config_mlp
     train_config = lanfactory.config.network_configs.train_config_mlp
-    train_config["n_epochs"] = 10
+    train_config["n_epochs"] = num_epochs
 
 
     # LOAD NETWORK
