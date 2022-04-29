@@ -44,12 +44,7 @@ mcmc_parameters = dict(
     )
 
 # Build MCMC posterior in SBI.
-mnle_posterior = MNLE().build_posterior(mnle, prior, 
-    mcmc_method="slice_np_vectorized", 
-    mcmc_parameters=mcmc_parameters,
-    )
 
-samples = []
 num_samples = 10000
 obs_idx = 10
 xo = xos_2d[obs_idx]
@@ -57,8 +52,23 @@ xo = xos_2d[obs_idx]
 reference_samples = task.get_reference_posterior_samples(201+obs_idx)[:num_samples]
 true_theta = task.get_true_parameters(201+obs_idx)
 
+## NUTS
+tic = time.time()
+mnle_posterior = MNLE().build_posterior(mnle, prior, 
+    mcmc_method="nuts", 
+    mcmc_parameters=mcmc_parameters,
+    )
+
+nuts_samples = mnle_posterior.sample((num_samples,), x=xo, mp_context="fork")
+nuts_time = time.time() - tic
+
 ## Slice sampling
 tic = time.time()
+mnle_posterior = MNLE().build_posterior(mnle, prior, 
+    mcmc_method="slice_np_vectorized", 
+    mcmc_parameters=mcmc_parameters,
+    )
+
 slice_samples = mnle_posterior.sample((num_samples,), x=xo)
 slice_time = time.time() - tic
 
@@ -71,17 +81,6 @@ viposterior.set_default_x(xo)
 viposterior.train()
 vi_samples = viposterior.sample((num_samples, ))
 vi_time = time.time() - tic
-
-## NUTS
-tic = time.time()
-mcmc_parameters["num_chains"] = 2
-mnle_posterior = MNLE().build_posterior(mnle, prior, 
-    mcmc_method="nuts", 
-    mcmc_parameters=mcmc_parameters,
-    )
-nuts_time = time.time() - tic
-
-nuts_samples = mnle_posterior.sample((num_samples,), x=xo)
 
 with open(save_folder / f"mnle_samplemethod_comparison_obs{201+obs_idx}.p", "wb") as fh:
     pickle.dump(dict(
