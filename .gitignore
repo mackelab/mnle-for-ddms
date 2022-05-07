@@ -1,6 +1,10 @@
 # Project specific
 *sbi-logs/
 
+data/
+notebooks/mnle-lan-comparison/data
+notebooks/mnle-lan-comparison/models
+
 # Development files and python cache
 /*.pyc
 /*.egg

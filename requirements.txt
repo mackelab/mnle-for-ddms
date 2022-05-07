@@ -4,4 +4,3 @@ lanfactory @ git+https://github.com/AlexanderFengler/ssm_simulators
 sbibm @ git+https://github.com/mackelab/sbibm@ddm-task#egg=sbibm
 sbi @ git+https://github.com/mackelab/sbi@main#egg=sbi
 ssms @ git+https://github.com/mackelab/ssm_simulators@mnle-comparison#egg=ssms
-tensorflow
