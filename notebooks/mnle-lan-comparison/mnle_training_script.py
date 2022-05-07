@@ -22,7 +22,7 @@ mnle_provider = likelihood_nn(
         hidden_layers = 1,
         hidden_features = 10,
     ))
-batch_size = 200
+batch_size = 100
 stop_after_epochs = 30
 
 def train_mnle(theta, x, num_simulations, seed):
@@ -52,7 +52,7 @@ x[x_1d[:, 0] > 0, 1] = 1
 
 num_workers = 10
 num_repeats = 10
-budgets = torch.tensor([1_000_000]).repeat_interleave(num_repeats)
+budgets = torch.tensor([200_000]).repeat_interleave(num_repeats)
 seeds = torch.randint(0, 1000000, size=(budgets.shape[0],))
 
 results = Parallel(n_jobs=num_workers)(

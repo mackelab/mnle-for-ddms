@@ -13,11 +13,11 @@ from pathlib import Path
 BASE_DIR = Path.cwd()
 
 # NOTE: set budget and n_samples, e.g., for 10k budget set 10_4 and n_samples 100
-# for 100k budget set 10_4 and n_samples 1000
+# for 100k budget set 10_5 and n_samples 1000
 budget = "10_5_ours"
-n_samples = 1000
-num_repeats = 9
-num_epochs = 30
+n_samples = 100
+num_repeats = 10
+num_epochs = 20
 
 # NOTE: The resulting trainiend LAN will be saved with a unique ID under torch_models/ddm_{budget}.
 

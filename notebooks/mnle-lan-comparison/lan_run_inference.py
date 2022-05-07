@@ -25,8 +25,18 @@ prior = task.get_prior_dist()
 simulator = task.get_simulator(seed=seed) # Passing the seed to Julia.
 
 # Observation indices >200 hold 100-trial observations
+num_trials = 1
+if num_trials == 1:
+    start_obs = 0
+elif num_trials == 10:
+    start_obs = 100
+elif num_trials == 100:
+    start_obs = 200
+else:
+    start_obs = 300
+
 num_obs = 100
-xos = torch.stack([task.get_observation(200 + ii) for ii in range(1, 1+num_obs)]).squeeze()
+xos = torch.stack([task.get_observation(start_obs + ii) for ii in range(1, 1+num_obs)]).reshape(num_obs, num_trials)
 
 # encode xos as (time, choice)
 xos_2d = torch.zeros((xos.shape[0], xos.shape[1], 2))
@@ -54,7 +64,7 @@ class LANPotential(BasePotential):
     allow_iid_x = True  # type: ignore
     """Inits LAN potential."""
 
-    def __init__(self, lan, prior, x_o, device="cpu", transform_a=True, ll_lower_bound=np.log(1e-7)):
+    def __init__(self, lan, prior, x_o, device="cpu", transform_a=False, ll_lower_bound=np.log(1e-7)):
         super().__init__(prior, x_o, device)
 
         self.lan = lan
@@ -116,7 +126,7 @@ a_transform = AffineTransform(torch.zeros(1, 4), torch.tensor([[1.0, 0.5, 1.0, 1
 
 samples = []
 num_samples = 1000
-num_workers = 10
+num_workers = 20
 
 def run(x_o):
     lan_posterior = MCMCPosterior(LANPotential(lan, prior, x_o.reshape(-1, 1)),
@@ -132,5 +142,5 @@ results = Parallel(n_jobs=num_workers)(
     delayed(run)(x_o) for x_o in xos
 )
 
-with open(save_folder / f"lan_{budget}_posterior_samples_{num_obs}x100iid.p", "wb") as fh:
+with open(save_folder / f"lan_{budget}_posterior_samples_{num_obs}x{num_trials}iid_new.p", "wb") as fh:
     pickle.dump(results, fh)
