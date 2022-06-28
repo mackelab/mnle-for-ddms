@@ -2,8 +2,8 @@
 *sbi-logs/
 
 data/
-notebooks/mnle-lan-comparison/data
-notebooks/mnle-lan-comparison/models
+notebooks/revision-experiments/data
+notebooks/revision-experiments/models
 
 # Development files and python cache
 /*.pyc
