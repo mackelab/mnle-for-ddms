@@ -1,3 +1,5 @@
+# Script for running MCMC using a pre-trained MNLE object from sbi.
+
 import pickle
 from pathlib import Path
 
@@ -14,7 +16,7 @@ prior = task.get_prior_dist()
 simulator = task.get_simulator(seed=seed) # Passing the seed to Julia.
 
 # Observation indices >200 hold 100-trial observations
-num_trials = 1
+num_trials = 100
 if num_trials == 1:
     start_obs = 0
 elif num_trials == 10:
@@ -35,9 +37,9 @@ for idx, xo in enumerate(xos):
 
 
 # load a LAN
-budget = "1000000"
+budget = "100000"
 model_path = Path.cwd() / f"models/"
-init_idx = 1
+init_idx = 2
 network_file_path = list(model_path.glob(f"mnle_n{budget}_new*"))[init_idx]  # take one model from random inits.
 
 with open(network_file_path, "rb") as fh:
@@ -64,15 +66,11 @@ for x_o in xos_2d:
 
     mnle_samples = mnle_posterior.sample(
         (num_samples,), 
-        x=x_o.reshape(100, 2)
+        x=x_o.reshape(num_trials, 2)
     )
-
-    # mnle_posterior.set_default_x(x_o.reshape(100, 2))
-    # mnle_posterior.train()
-    # vi_samples = mnle_posterior.sample((num_samples, ))
     
     samples.append(mnle_samples)
 
-with open(f"mnle-{init_idx}_{budget}_posterior_samples_{num_obs}x{num_trials}*iid.p", "wb") as fh:
+with open(f"mnle-{init_idx}_{budget}_posterior_samples_{num_obs}x{num_trials}iid.p", "wb") as fh:
     pickle.dump(samples, fh)
 

@@ -1,4 +1,5 @@
 # Adapted from: https://github.com/AlexanderFengler/LANfactory
+# Script to run LAN training given a pre-simulated data set.
 
 # Load necessary packages
 import lanfactory 

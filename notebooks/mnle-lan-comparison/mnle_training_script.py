@@ -1,3 +1,5 @@
+# Script for training MNLE with pre-simulated data.
+
 import pickle
 import torch
 
