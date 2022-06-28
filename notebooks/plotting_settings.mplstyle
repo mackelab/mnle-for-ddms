@@ -1,11 +1,12 @@
-font.sans-serif : Arial
+font.sans-serif : open-sans
 font.family : sans-serif
 axes.spines.top : False
 axes.spines.right : False
-axes.labelsize : medium
-xtick.labelsize : small
-ytick.labelsize : small
+axes.labelsize : 17
+xtick.labelsize : 15
+ytick.labelsize : 15
 legend.frameon : False
-legend.fontsize : 18
-font.size : 20
+legend.fontsize : 17
+font.size : 17
 
+text.usetex: false
