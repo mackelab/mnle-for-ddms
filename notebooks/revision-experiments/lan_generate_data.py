@@ -4,10 +4,10 @@
 
 # Load necessary packages
 from copy import deepcopy
-import torch
 
 import sbibm
 import ssms
+import torch
 
 # Get benchmark task to load Julia simulator.
 seed = torch.randint(100000, (1,)).item()

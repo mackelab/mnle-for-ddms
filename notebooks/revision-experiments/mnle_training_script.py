@@ -1,13 +1,12 @@
 # Script for training MNLE with pre-simulated data.
 
 import pickle
-import torch
-
-from joblib import Parallel, delayed
 from pathlib import Path
+
+import torch
+from joblib import Parallel, delayed
 from sbi.inference import MNLE
 from sbi.utils import likelihood_nn
-
 
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.as_posix()
 data_folder = BASE_DIR + "/data/"

@@ -1,21 +1,19 @@
 import math
 import os
-from pathlib import Path
 import pickle
+from pathlib import Path
 from typing import Any, Tuple
 
+import lanfactory
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
 import torch
 from omegaconf import OmegaConf
-from sbibm.utils.io import get_float_from_csv
-from tqdm.auto import tqdm
-
-from torch.distributions.transforms import AffineTransform
-
-import lanfactory
 from sbi.inference.potentials.base_potential import BasePotential
+from sbibm.utils.io import get_float_from_csv
+from torch.distributions.transforms import AffineTransform
+from tqdm.auto import tqdm
 
 
 def compile_df(

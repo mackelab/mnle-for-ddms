@@ -2,11 +2,9 @@ from typing import Optional
 
 import numpy as np
 import torch
-
-from torch import Tensor, nn
 from sbi.utils.sbiutils import standardizing_net
+from torch import Tensor, nn
 from torch.distributions import Bernoulli
-from torch import Tensor
 
 
 def build_choice_net(

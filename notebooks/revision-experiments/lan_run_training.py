@@ -1,15 +1,14 @@
 # Adapted from: https://github.com/AlexanderFengler/LANfactory
 # Script to run LAN training given a pre-simulated data set.
 
-# Load necessary packages
-import lanfactory
 import os
 from copy import deepcopy
-import torch
-
-from lanfactory.trainers import ModelTrainerTorchMLP
 from pathlib import Path
 
+# Load necessary packages
+import lanfactory
+import torch
+from lanfactory.trainers import ModelTrainerTorchMLP
 
 BASE_DIR = Path.cwd()
 

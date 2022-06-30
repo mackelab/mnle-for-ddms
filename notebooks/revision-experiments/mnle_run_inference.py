@@ -5,7 +5,6 @@ from pathlib import Path
 
 import sbibm
 import torch
-
 from sbi.inference import MNLE
 
 # Get benchmark task to load observations
