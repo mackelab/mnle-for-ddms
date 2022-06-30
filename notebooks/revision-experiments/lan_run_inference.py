@@ -5,6 +5,7 @@
 import pickle
 from pathlib import Path
 from joblib import Parallel, delayed
+import sys
 
 import lanfactory
 import sbibm
@@ -13,8 +14,9 @@ import torch
 from sbi.inference import MCMCPosterior
 from sbi.utils import mcmc_transform
 
+# add path to utils in parent folder.
+sys.path.append("../")
 from utils import LANPotential
-
 
 BASE_DIR = Path.cwd().parent.parent
 save_folder = BASE_DIR / "data/results"
