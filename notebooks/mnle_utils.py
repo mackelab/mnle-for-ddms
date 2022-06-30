@@ -9,23 +9,32 @@ from torch.distributions import Bernoulli
 from torch import Tensor
 
 
+def build_choice_net(
+    batch_theta,
+    batch_choices,
+    num_choices=2,
+    z_score_theta=False,
+    hidden_features: int = 10,
+    hidden_layers: int = 2,
+):
 
-def build_choice_net(batch_theta, batch_choices, num_choices=2, z_score_theta=False, hidden_features: int=10, hidden_layers: int=2):
-    
     dim_parameters = batch_theta[0].numel()
     num_output = num_choices
-    
+
     assert num_choices == 2, "Not implemented for more than two choices."
-    
-    choice_net = BernoulliMN(n_input=dim_parameters, 
-                             n_output=1,  # TODO: adapt to multiple choices.
-                             n_hidden_layers=hidden_layers, 
-                             n_hidden_units=hidden_features)
-    
+
+    choice_net = BernoulliMN(
+        n_input=dim_parameters,
+        n_output=1,  # TODO: adapt to multiple choices.
+        n_hidden_layers=hidden_layers,
+        n_hidden_units=hidden_features,
+    )
+
     if z_score_theta:
         choice_net = nn.Sequential(standardizing_net(batch_theta), choice_net)
-    
+
     return choice_net
+
 
 class MNLE(nn.Module):
     """Class for Mixed Neural Likelihood Estimation. It combines a Bernoulli choice
@@ -84,93 +93,97 @@ class MNLE(nn.Module):
         return torch.cat((rts, choices), dim=1)
 
     def log_prob(
-            self,
-            x: Tensor,
-            context: Tensor,
-            track_gradients: bool = False,
-            ll_lower_bound: float = -16.11,
-        ) -> Tensor:
-            """Return joint log likelihood of a batch rts and choices,for each entry in a
-            batch of parameters theta.
+        self,
+        x: Tensor,
+        context: Tensor,
+        track_gradients: bool = False,
+        ll_lower_bound: float = -16.11,
+    ) -> Tensor:
+        """Return joint log likelihood of a batch rts and choices,for each entry in a
+        batch of parameters theta.
 
-            Note that x and theta are assumed to be repeated already, as required by the
-            potential functions in the sbi package. Below torch.unique is used to get the
-            original theta and x for efficient likelihood calculation.
+        Note that x and theta are assumed to be repeated already, as required by the
+        potential functions in the sbi package. Below torch.unique is used to get the
+        original theta and x for efficient likelihood calculation.
 
-            Note that we calculate the joint log likelihood over the batch of iid trials.
-            Therefore, only theta can be batched and the data is fixed (or a batch of data
-            is interpreted as iid trials)
+        Note that we calculate the joint log likelihood over the batch of iid trials.
+        Therefore, only theta can be batched and the data is fixed (or a batch of data
+        is interpreted as iid trials)
 
-            Args:
-                x: the value to evaluate, typically a tensor containing reaction times and
-                    choices, [rts; c].
-                context: the context the values are conditioned on, typically parameters.
-                track_gradients: whether to track gradients during evaluation, e.g., in HMC
-                ll_lower_bound: lower bound on the returned log likelihoods.
-            
-            Returns:
-                log_likelihood_trial_batch: log likelihoods for each trial and parameter.
-            """
-            assert x.shape[0] == context.shape[0], "x and context must have same batch size."
-            # Extract unique values to undo trial-parameter-batch matching.
-            theta = torch.unique(context, sorted=False, dim=0)
-            num_parameters = theta.shape[0]
-            x_unique = torch.unique(x, sorted=False, dim=0)
-            num_trials = x_unique.shape[0]
-            
-            assert x_unique.ndim > 1
-            assert (
-                x_unique.shape[1] == 2
-            ), "MNLE assumes x to have two columns: [rts; choices]"
+        Args:
+            x: the value to evaluate, typically a tensor containing reaction times and
+                choices, [rts; c].
+            context: the context the values are conditioned on, typically parameters.
+            track_gradients: whether to track gradients during evaluation, e.g., in HMC
+            ll_lower_bound: lower bound on the returned log likelihoods.
 
-            rts_repeated = x[:, 0:1]
-            choices_repeated = x[:, 1:2]
-            rts = x_unique[:, 0:1]
-            choices = x_unique[:, 1:2]
+        Returns:
+            log_likelihood_trial_batch: log likelihoods for each trial and parameter.
+        """
+        assert (
+            x.shape[0] == context.shape[0]
+        ), "x and context must have same batch size."
+        # Extract unique values to undo trial-parameter-batch matching.
+        theta = torch.unique(context, sorted=False, dim=0)
+        num_parameters = theta.shape[0]
+        x_unique = torch.unique(x, sorted=False, dim=0)
+        num_trials = x_unique.shape[0]
 
-            with torch.set_grad_enabled(track_gradients):
-                # Get choice log probs from choice net.
-                # There are only two choices, thus we only have to get the log probs of those.
-                zero_choice = torch.zeros(1, 1)
-                zero_choice_lp = self.choice_net.log_prob(
-                    torch.repeat_interleave(zero_choice, num_parameters, dim=0),
-                    context=theta,
-                ).reshape(1, num_parameters)  # for each theta.
+        assert x_unique.ndim > 1
+        assert (
+            x_unique.shape[1] == 2
+        ), "MNLE assumes x to have two columns: [rts; choices]"
 
-                # Calculate complement one-choice log prob.
-                one_choice_lp = torch.log(1 - zero_choice_lp.exp())
-                zero_one_lps = torch.cat((zero_choice_lp, one_choice_lp), dim=0)
+        rts_repeated = x[:, 0:1]
+        choices_repeated = x[:, 1:2]
+        rts = x_unique[:, 0:1]
+        choices = x_unique[:, 1:2]
 
-                lp_choices = zero_one_lps[
-                    choices.type_as(torch.zeros(1, dtype=np.int)).squeeze()
-                ].reshape(-1)
-                
-                # Get rt log probs from rt net.
-                lp_rts = self.rt_net.log_prob(
-                    torch.log(rts_repeated) if self.use_log_rts else rts_repeated,
-                    context=torch.cat((context, choices_repeated), dim=1),
-                )
+        with torch.set_grad_enabled(track_gradients):
+            # Get choice log probs from choice net.
+            # There are only two choices, thus we only have to get the log probs of those.
+            zero_choice = torch.zeros(1, 1)
+            zero_choice_lp = self.choice_net.log_prob(
+                torch.repeat_interleave(zero_choice, num_parameters, dim=0),
+                context=theta,
+            ).reshape(
+                1, num_parameters
+            )  # for each theta.
 
-            # Combine into joint lp with first dim over trials.
-            lp_combined = (lp_choices + lp_rts).reshape(num_trials, num_parameters)
+            # Calculate complement one-choice log prob.
+            one_choice_lp = torch.log(1 - zero_choice_lp.exp())
+            zero_one_lps = torch.cat((zero_choice_lp, one_choice_lp), dim=0)
 
-            # Maybe add log abs det jacobian of RTs: log(1/rt) = - log(rt)
-            if self.use_log_rts:
-                lp_combined -= torch.log(rts)
-            # Set to lower bound where reaction happend before non-decision time tau.
-            log_likelihood_trial_batch = torch.where(
-                torch.logical_and(
-                    # If rt < tau the likelihood should be zero (or at lower bound).
-                    rts.repeat(1, num_parameters) > theta[:, -1],
-                    # Apply lower bound.
-                    lp_combined > ll_lower_bound,
-                ),
-                lp_combined,
-                ll_lower_bound * torch.ones_like(lp_combined),
+            lp_choices = zero_one_lps[
+                choices.type_as(torch.zeros(1, dtype=np.int)).squeeze()
+            ].reshape(-1)
+
+            # Get rt log probs from rt net.
+            lp_rts = self.rt_net.log_prob(
+                torch.log(rts_repeated) if self.use_log_rts else rts_repeated,
+                context=torch.cat((context, choices_repeated), dim=1),
             )
 
-            # Return batch over trials as required by SBI potentials.
-            return log_likelihood_trial_batch
+        # Combine into joint lp with first dim over trials.
+        lp_combined = (lp_choices + lp_rts).reshape(num_trials, num_parameters)
+
+        # Maybe add log abs det jacobian of RTs: log(1/rt) = - log(rt)
+        if self.use_log_rts:
+            lp_combined -= torch.log(rts)
+        # Set to lower bound where reaction happend before non-decision time tau.
+        log_likelihood_trial_batch = torch.where(
+            torch.logical_and(
+                # If rt < tau the likelihood should be zero (or at lower bound).
+                rts.repeat(1, num_parameters) > theta[:, -1],
+                # Apply lower bound.
+                lp_combined > ll_lower_bound,
+            ),
+            lp_combined,
+            ll_lower_bound * torch.ones_like(lp_combined),
+        )
+
+        # Return batch over trials as required by SBI potentials.
+        return log_likelihood_trial_batch
 
 
 class BernoulliMN(nn.Module):

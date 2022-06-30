@@ -1,5 +1,5 @@
 # Script to run inference with MCMC given a pretrained LAN
-# Uses MCMC methods from the sbi package, via a custom potential 
+# Uses MCMC methods from the sbi package, via a custom potential
 # function wrapper in utils.
 
 import pickle
@@ -26,7 +26,7 @@ seed = torch.randint(100000, (1,)).item()
 
 task = sbibm.get_task("ddm")
 prior = task.get_prior_dist()
-simulator = task.get_simulator(seed=seed) # Passing the seed to Julia.
+simulator = task.get_simulator(seed=seed)  # Passing the seed to Julia.
 
 # Observation indices >200 hold 100-trial observations
 num_trials = 100
@@ -40,7 +40,9 @@ else:
     start_obs = 300
 
 num_obs = 100
-xos = torch.stack([task.get_observation(start_obs + ii) for ii in range(1, 1+num_obs)]).reshape(num_obs, num_trials)
+xos = torch.stack(
+    [task.get_observation(start_obs + ii) for ii in range(1, 1 + num_obs)]
+).reshape(num_obs, num_trials)
 
 # encode xos as (time, choice)
 xos_2d = torch.zeros((xos.shape[0], xos.shape[1], 2))
@@ -54,32 +56,36 @@ budget = "10_11"
 apply_a_transform = True
 apply_ll_lower_bound = True
 model_path = Path.cwd() / f"data/torch_models/ddm_{budget}/"
-network_file_path = list(model_path.glob("*state_dict*"))[0]  # take first model from random inits.
+network_file_path = list(model_path.glob("*state_dict*"))[
+    0
+]  # take first model from random inits.
 
 # get network config from model folder.
-with open(list(network_file_path.parent.glob("*_network_config.pickle"))[0], "rb") as fh:
+with open(
+    list(network_file_path.parent.glob("*_network_config.pickle"))[0], "rb"
+) as fh:
     network_config = pickle.load(fh)
 
 # load model
-lan = lanfactory.trainers.LoadTorchMLPInfer(model_file_path = network_file_path,
-                                            network_config = network_config,
-                                            input_dim = 6)  # 4 params plus 2 data dims)
+lan = lanfactory.trainers.LoadTorchMLPInfer(
+    model_file_path=network_file_path, network_config=network_config, input_dim=6
+)  # 4 params plus 2 data dims)
 
 # load old LAN
 from tensorflow import keras
+
 # network trained on KDE likelihood for 4-param ddm
 lan_kde_path = Path.cwd() / "../../data/pretrained-models/model_final_ddm.h5"
 lan = keras.models.load_model(lan_kde_path, compile=False)
 
 
-
 mcmc_parameters = dict(
-    warmup_steps = 100, 
-    thin = 10, 
-    num_chains = 10,
-    num_workers = 1,
-    init_strategy = "sir",
-    )
+    warmup_steps=100,
+    thin=10,
+    num_chains=10,
+    num_workers=1,
+    init_strategy="sir",
+)
 
 # Build MCMC posterior in SBI.
 theta_transform = mcmc_transform(prior)
@@ -88,25 +94,30 @@ samples = []
 num_samples = 10000
 num_workers = 20
 
+
 def run(x_o):
-    lan_potential = LANPotential(lan, 
-        prior, 
-        x_o.reshape(-1, 1), 
-        apply_a_transform=apply_a_transform, 
+    lan_potential = LANPotential(
+        lan,
+        prior,
+        x_o.reshape(-1, 1),
+        apply_a_transform=apply_a_transform,
         apply_ll_lower_bound=apply_ll_lower_bound,
-        )
-    lan_posterior = MCMCPosterior(lan_potential,
+    )
+    lan_posterior = MCMCPosterior(
+        lan_potential,
         proposal=prior,
-        theta_transform=theta_transform, 
+        theta_transform=theta_transform,
         method="slice_np_vectorized",
         **mcmc_parameters,
-        )
-    
+    )
+
     return lan_posterior.sample((num_samples,), x=x_o)
 
-results = Parallel(n_jobs=num_workers)(
-    delayed(run)(x_o) for x_o in xos
-)
 
-with open(save_folder / f"lan_{budget}_posterior_samples_{num_obs}x{num_trials}iid_old.p", "wb") as fh:
+results = Parallel(n_jobs=num_workers)(delayed(run)(x_o) for x_o in xos)
+
+with open(
+    save_folder / f"lan_{budget}_posterior_samples_{num_obs}x{num_trials}iid_old.p",
+    "wb",
+) as fh:
     pickle.dump(results, fh)

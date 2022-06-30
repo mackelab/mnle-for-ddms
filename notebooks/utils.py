@@ -17,7 +17,10 @@ from torch.distributions.transforms import AffineTransform
 import lanfactory
 from sbi.inference.potentials.base_potential import BasePotential
 
-def compile_df(basepath: str,) -> pd.DataFrame:
+
+def compile_df(
+    basepath: str,
+) -> pd.DataFrame:
     """Compile dataframe for further analyses
 
     `basepath` is the path to a folder over which to recursively loop. All information
@@ -123,6 +126,7 @@ def compile_df(basepath: str,) -> pd.DataFrame:
 
     return df
 
+
 # affine transform
 # add scale transform for "a": to go to LAN prior space, i.e., multiply with scale 0.5.
 a_transform = AffineTransform(torch.zeros(1, 4), torch.tensor([[1.0, 0.5, 1.0, 1.0]]))
@@ -132,17 +136,18 @@ class LANPotential(BasePotential):
     allow_iid_x = True  # type: ignore
     """Inits LAN potential as required by the sbi package for MCMC sampling."""
 
-    def __init__(self, 
-            lan, 
-            prior: torch.distributions.Distribution, 
-            x_o: torch.Tensor, 
-            device: str="cpu", 
-            apply_a_transform: bool=False, 
-            ll_lower_bound: float=np.log(1e-7), 
-            apply_ll_lower_bound: bool = False
-        ):
-        """Init. 
-        
+    def __init__(
+        self,
+        lan,
+        prior: torch.distributions.Distribution,
+        x_o: torch.Tensor,
+        device: str = "cpu",
+        apply_a_transform: bool = False,
+        ll_lower_bound: float = np.log(1e-7),
+        apply_ll_lower_bound: bool = False,
+    ):
+        """Init.
+
         Args:
             lan: pretrained LAN holding the pytorch module.
             prior: prior for inference
@@ -150,7 +155,7 @@ class LANPotential(BasePotential):
             device: device of the LAN
             apply_a_transform: whether to transform the DDM parameter 'a' to go
                 from symmetric boundary width (LAN), to boundary separation (SBI)
-            ll_lower_bound: lower bound on the log-likelihood evaluations, 
+            ll_lower_bound: lower bound on the log-likelihood evaluations,
                 as used in the LAN paper.
             apply_ll_lower_bound: whether to enforce the lower bound.
         """
@@ -161,7 +166,7 @@ class LANPotential(BasePotential):
         self.ll_lower_bound = ll_lower_bound
         self.apply_ll_lower_bound = apply_ll_lower_bound
         self.apply_a_transform = apply_a_transform
-        
+
         # make sure data is encoded in 1D: choices as sign of rt.
         assert x_o.ndim == 2
         assert x_o.shape[1] == 1
@@ -179,17 +184,21 @@ class LANPotential(BasePotential):
 
     def __call__(self, theta, track_gradients=False):
         """Return potential function value for a batch of parameters theta."""
-            
+
         num_parameters = theta.shape[0]
         # Convert DDM boundary seperation to symmetric boundary size.
         # theta_lan = a_transform(theta)
         theta_lan = a_transform(theta) if self.apply_a_transform else theta
 
         # Evaluate LAN on batch (as suggested in LANfactory README.)
-        batch = torch.hstack((
-            theta_lan.repeat(self.num_trials, 1),  # repeat params for each trial
-            self.rts.repeat_interleave(num_parameters, dim=0),  # repeat data for each param
-            self.cs.repeat_interleave(num_parameters, dim=0))
+        batch = torch.hstack(
+            (
+                theta_lan.repeat(self.num_trials, 1),  # repeat params for each trial
+                self.rts.repeat_interleave(
+                    num_parameters, dim=0
+                ),  # repeat data for each param
+                self.cs.repeat_interleave(num_parameters, dim=0),
+            )
         )
         log_likelihood_trials = self.lan(batch).reshape(self.num_trials, num_parameters)
 
@@ -197,14 +206,18 @@ class LANPotential(BasePotential):
         # Lower bound on each trial log likelihood.
         # Sum across trials.
         if self.apply_ll_lower_bound:
-            log_likelihood_trial_sum = torch.where(
-                torch.logical_and(
-                    self.rts.repeat(1, num_parameters) > theta[:, -1], 
-                    log_likelihood_trials > self.ll_lower_bound,
-                ),
-                log_likelihood_trials,
-                self.ll_lower_bound * torch.ones_like(log_likelihood_trials),
-            ).sum(0).squeeze()
+            log_likelihood_trial_sum = (
+                torch.where(
+                    torch.logical_and(
+                        self.rts.repeat(1, num_parameters) > theta[:, -1],
+                        log_likelihood_trials > self.ll_lower_bound,
+                    ),
+                    log_likelihood_trials,
+                    self.ll_lower_bound * torch.ones_like(log_likelihood_trials),
+                )
+                .sum(0)
+                .squeeze()
+            )
         else:
             log_likelihood_trial_sum = log_likelihood_trials.sum(0).squeeze()
 
@@ -212,16 +225,16 @@ class LANPotential(BasePotential):
         if self.apply_a_transform:
             log_abs_det = a_transform.log_abs_det_jacobian(theta_lan, theta)
             if log_abs_det.ndim > 1:
-                    log_abs_det = log_abs_det.sum(-1)
+                log_abs_det = log_abs_det.sum(-1)
             log_likelihood_trial_sum -= log_abs_det
 
         return log_likelihood_trial_sum + self.prior.log_prob(theta)
 
 
 def lan_likelihood_on_batch(
-    data: torch.Tensor, 
-    theta: torch.Tensor, 
-    net, 
+    data: torch.Tensor,
+    theta: torch.Tensor,
+    net,
     transform,
     device,
 ):
@@ -244,17 +257,19 @@ def lan_likelihood_on_batch(
     cs[data < 0] *= -1
 
     # Evaluate LAN on batch (as suggested in LANfactory README.)
-    batch = torch.hstack((
-        theta_lan.repeat(num_trials, 1),  # repeat params for each trial
-        rts.repeat_interleave(num_parameters, dim=0),  # repeat data for each param
-        cs.repeat_interleave(num_parameters, dim=0))
+    batch = torch.hstack(
+        (
+            theta_lan.repeat(num_trials, 1),  # repeat params for each trial
+            rts.repeat_interleave(num_parameters, dim=0),  # repeat data for each param
+            cs.repeat_interleave(num_parameters, dim=0),
+        )
     )
     log_likelihood_trials = net(batch.to(device)).reshape(num_trials, num_parameters)
-    
-    return log_likelihood_trials.to("cpu")
-    
 
-def apply_lower_bound_given_mask(ll, mask, ll_lower_bound: float=np.log(1e-7)):
+    return log_likelihood_trials.to("cpu")
+
+
+def apply_lower_bound_given_mask(ll, mask, ll_lower_bound: float = np.log(1e-7)):
     """Replaces values at mask with lower bound."""
 
     assert mask.shape == ll.shape, "Mask must have the same shape as the input."
@@ -263,54 +278,64 @@ def apply_lower_bound_given_mask(ll, mask, ll_lower_bound: float=np.log(1e-7)):
 
     return ll
 
+
 def decode_1d_to_2d_x(x1d):
-    """Decodes rts with choices encoded as sign into (rts, 0-1-choices) """
+    """Decodes rts with choices encoded as sign into (rts, 0-1-choices)"""
     x = torch.zeros((x1d.shape[0], 2))
     # abs rts in first column
     x[:, 0] = abs(x1d[:, 0])
     # 0 - 1 code for choices in second column.
     x[x1d[:, 0] > 0, 1] = 1
-    
+
     return x
+
 
 # Define losses.
 def huber_loss(y, yhat):
-    diff = abs(y-yhat)
-    
+    diff = abs(y - yhat)
+
     err = np.zeros(y.numel())
-    err[diff <= 1.0] = 0.5 * diff[diff <= 1.0]**2
+    err[diff <= 1.0] = 0.5 * diff[diff <= 1.0] ** 2
     err[diff > 1.0] = 0.5 + diff[diff > 1.0]
     return err.mean()
 
+
 def mean_squared_error(y, yhat):
-    return torch.mean((y - yhat)**2)
+    return torch.mean((y - yhat) ** 2)
+
 
 def load_lan(budget: str) -> Tuple(str, Any):
     """Returns a pretrained LAN given a certain simulation budget."""
- 
-    lan_model_folder = Path.cwd() / f"mnle-lan-comparison/data/torch_models/ddm_{budget}/"  # Pathlib object
-    network_file_path = list(lan_model_folder.glob(f"*_ddm_{budget}_torch_state_dict.pt"))[0]
+
+    lan_model_folder = (
+        Path.cwd() / f"mnle-lan-comparison/data/torch_models/ddm_{budget}/"
+    )  # Pathlib object
+    network_file_path = list(
+        lan_model_folder.glob(f"*_ddm_{budget}_torch_state_dict.pt")
+    )[0]
 
     # get network config from model folder.
-    with open(list(network_file_path.parent.glob("*_network_config.pickle"))[0], "rb") as fh:
+    with open(
+        list(network_file_path.parent.glob("*_network_config.pickle"))[0], "rb"
+    ) as fh:
         network_config = pickle.load(fh)
 
     # load model
-    network = lanfactory.trainers.LoadTorchMLPInfer(model_file_path = network_file_path,
-                                                network_config = network_config,
-                                                input_dim = 6)  # 4 params plus 2 data dims
+    network = lanfactory.trainers.LoadTorchMLPInfer(
+        model_file_path=network_file_path, network_config=network_config, input_dim=6
+    )  # 4 params plus 2 data dims
 
     return network_file_path, network
 
 
-def plot_bar(pos, width, metrics, label, color, alpha=.6):
+def plot_bar(pos, width, metrics, label, color, alpha=0.6):
     """Helper function for bar plots below."""
     plt.bar(
-            pos, 
-            height=metrics.mean(0), 
-            width=width,
-            yerr=metrics.std(0) / np.sqrt(metrics.shape[0]), 
-            color = color,
-            label=label,
-            alpha=alpha,
-            )
+        pos,
+        height=metrics.mean(0),
+        width=width,
+        yerr=metrics.std(0) / np.sqrt(metrics.shape[0]),
+        color=color,
+        label=label,
+        alpha=alpha,
+    )
