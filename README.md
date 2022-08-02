@@ -38,3 +38,24 @@ The research code for MNLE is in [`notebooks/mnle_utils.py`](notebooks/mnle_util
 ## Storage of large files via `git-lfs`
 
 This repository contains large files, e.g., the training data and the pre-trained neural networks for rerpoducing all results presented in the paper. These files are stored using [`git-lfs`](https://git-lfs.github.com). When your goal is to download the entire repository including all large files, please make sure to have `git-lfs` installed locally. 
+
+## Citation
+```
+@article{10.7554/eLife.77220,
+     article_type = {journal},
+     title = {Flexible and efficient simulation-based inference for models of decision-making},
+     author = {Boelts, Jan and Lueckmann, Jan-Matthis and Gao, Richard and Macke, Jakob H},
+     editor = {Wyart, Valentin},
+     volume = 11,
+     year = 2022,
+     month = {jul},
+     pub_date = {2022-07-27},
+     pages = {e77220},
+     citation = {eLife 2022;11:e77220},
+     doi = {10.7554/eLife.77220},
+     url = {https://doi.org/10.7554/eLife.77220},
+     journal = {eLife},
+     issn = {2050-084X},
+     publisher = {eLife Sciences Publications, Ltd},
+}
+```
